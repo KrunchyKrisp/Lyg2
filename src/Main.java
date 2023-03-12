@@ -1,13 +1,17 @@
+/*
+ *
+ */
 public class Main {
+    public static int sharedResource = 0;
 
-    public static MySemaphore ms = new MySemaphore(1);
-    public static int shared = 0;
-    public static int count = 4;
     public static void main(String[] args) throws InterruptedException {
+        MySemaphore ms = new MySemaphore(1);
+
+        int count = 10;
         MyThread[] threads = new MyThread[count];
 
         for (int i = 0; i < count; ++i) {
-            threads[i] = new MyThread(i % 2 == 0 ? 1 : -1);
+            threads[i] = new MyThread(ms, i % 2 == 0 ? 1 : -1);
             threads[i].start();
         }
 
@@ -15,10 +19,37 @@ public class Main {
             threads[i].join();
         }
 
-        System.out.println("All Threads Done. " + ms.numberAvailable() + " left.");
-        System.out.println(shared);
+        System.out.println("All Threads Done");
+        System.out.println("Semaphore Counter = " + ms.numberAvailable());
+        System.out.println("Shared Resource = " + sharedResource);
+    }
+}
+
+class MyThread extends Thread {
+    int changeAmount;
+    MySemaphore ms;
+
+    public MyThread(MySemaphore ms, int changeAmount) {
+        this.ms = ms;
+        this.changeAmount = changeAmount;
     }
 
+    public void run() {
+        for (int i = 0; i < 1_000_000; ++i) {
+            try {
+                ms.request();
+
+                int temp = Main.sharedResource;
+                temp += changeAmount;
+                Main.sharedResource = temp;
+
+            } catch (InterruptedException e) {
+                System.out.println(e.getMessage());
+            } finally {
+                ms.release();
+            }
+        }
+    }
 }
 
 class MySemaphore {
@@ -33,7 +64,7 @@ class MySemaphore {
     }
 
     public synchronized void request() throws InterruptedException {
-        if (count <= 0) {
+        while (count <= 0) {
             this.wait();
         }
         --count;
@@ -44,29 +75,5 @@ class MySemaphore {
         if (count > 0) {
             this.notify();
         }
-    }
-}
-
-class MyThread extends Thread {
-    int increment;
-    public MyThread(int increment) {
-        this.increment = increment;
-    }
-
-    public void run() {
-            for (int i = 0; i < 1_000_000; ++i) {
-                try {
-                    Main.ms.request();
-
-                    int temp = Main.shared;
-                    temp += increment;
-                    Main.shared = temp;
-
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    Main.ms.release();
-                }
-            }
     }
 }
